@@ -1,0 +1,12 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# Editor/OS cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local Claude Code session/tooling state
+.claude/

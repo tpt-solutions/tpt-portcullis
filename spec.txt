@@ -1,0 +1,180 @@
+# tpt-portcullis — Design Spec
+
+**Working title only** — purely a placeholder used in this document; not a
+proposed or reserved real name. Phillip names the actual product.
+**Type:** new repo (the firewall/router product itself)
+**License:** MIT OR Apache-2.0 (dual, per house policy)
+**Status:** proposed, unvalidated
+
+## What this repo is
+
+This is the product repo — the Rust-native OPNsense-equivalent itself. Most
+of its hard technical dependencies are deliberately *not* built here:
+
+| Dependency | Repo | Role |
+|---|---|---|
+| Dataplane enactment | `tpt-netctl` | applies filter/NAT/rate-limit state to nftables/eBPF |
+| Privileged execution | `tpt-privd` | the only process allowed to touch the kernel |
+| HA / failover | `tpt-quorum` | 2-node active/passive coordination |
+| Declarative config engine | `tpt-bastion` (+ new network provider) | plan/apply/drift-detection |
+| VPN (WireGuard) | `boringtun` (external, BSD-3-Clause) | adopted, not built |
+| DNS resolver | `hickory-dns` (external, MIT/Apache dual) | adopted, not built |
+| Protocol/packet inspection | `tpt-fathom` | DPI, logging substrate |
+| Admin UI framework | `tpt-appfront` | cross-platform Rust UI |
+| Secrets/certs | `tpt-citadel` | VPN keys, cert storage |
+| Admin auth | `tpt-aegis` | IAM, 2FA |
+
+What's actually new *in this repo* is the rule model and the product-level
+glue that wires the above together into one coherent thing a person can
+install and run.
+
+## Why this scope, and what's deliberately excluded
+
+Per the earlier scoping conversation: OPNsense's IDS/IPS (Suricata) and
+OpenVPN/IPsec compatibility have no mature permissive Rust alternative and
+are the highest-cost, lowest-shortcut pieces of the whole space. They are
+explicitly **out of scope for this repo's initial build** — either shelled
+out to as separate GPL processes (no linking, same posture OPNsense itself
+uses today) or deferred entirely to a later phase. Don't let the product
+repo's scope creep into rebuilding those from scratch without a specific
+decision to do so.
+
+## Component: `portcullis-rules` (crate, inside this repo)
+
+**Purpose.** A structured, serializable, backend-independent data model for
+filter, NAT, and traffic-shaping rules. This is the type `tpt-netctl`'s
+`apply(&RulesetDiff)` consumes, and what `tpt-bastion`'s network provider
+produces from a person's declarative config. It's a crate here rather than
+its own repo because it's domain-specific to this product — no other
+portfolio repo plausibly wants this exact type today.
+
+**Core types (sketch):**
+
+```rust
+struct Ruleset { chains: Vec<Chain>, version: u64 }
+struct Chain { name: String, rules: Vec<Rule>, default_policy: Policy }
+struct Rule { id: RuleId, priority: u32, matcher: Matcher, action: Action }
+enum Action { Accept, Drop, Reject, Nat(NatRule), RateLimit(ShapingPolicy) }
+enum Policy { Accept, Drop }
+```
+
+- **Matcher vocabulary** (protocol, address, port, interface) should reuse
+  `tpt-fathom`'s existing protocol type definitions rather than define
+  address/port/protocol types a third time in the portfolio. Read
+  `tpt-fathom` directly before drafting `Matcher` — this was flagged but
+  not resolved in the current session.
+- **Validation before apply.** A lint/verify pass catching unreachable
+  rules, priority collisions, and shadowed rules. This directly borrows the
+  *pattern* `tpt-gatemesh` already uses for its loop-free routing
+  verification — model the ruleset as a graph, verify properties, refuse to
+  hand a `Ruleset` to `tpt-netctl` if verification fails. Worth reading
+  `tpt-gatemesh`'s `core`/`control` crates directly for the verification
+  approach even though the domain (HTTP routing vs. packet filtering)
+  differs.
+- **Versioned schema.** Same spirit as `bastion-ir`'s versioned IR (from
+  `tpt-bastion`) — rules need to survive config migrations across product
+  releases without silent breakage. Confirm `bastion-ir`'s actual
+  versioning approach before designing this from scratch, since consistency
+  with how the rest of the config pipeline versions things matters more
+  than a novel scheme here.
+
+## Product-level architecture (rough shape)
+
+```
+tpt-portcullis/
+├── crates/
+│   ├── portcullis-rules/   # the rule model above
+│   ├── portcullis-cli/     # admin CLI
+│   └── portcullis-daemon/  # glues netctl + privd + quorum + bastion provider
+├── ui/                     # admin web UI, via tpt-appfront
+└── docs/
+```
+
+- `portcullis-daemon` is where `tpt-netctl`, `tpt-privd`, `tpt-quorum`, and
+  the `tpt-bastion` network provider actually get wired together into a
+  running system. It is intentionally thin — most of the hard logic lives
+  in the dependency repos, per the table above.
+- The admin UI talks to `portcullis-daemon` (not directly to `tpt-privd` —
+  the daemon owns the privileged boundary), and should be built on
+  `tpt-appfront` rather than a new UI stack, per the earlier scoping
+  conversation.
+
+## Phased build order
+
+1. `portcullis-rules` — the rule model, since `tpt-netctl` and the Bastion
+   provider both need a concrete type to consume/produce.
+2. Minimal `portcullis-daemon` wiring `tpt-netctl` + `tpt-privd` directly
+   (config via a plain file, no Bastion integration yet) — get a working
+   filter/NAT firewall on a single box before adding HA or declarative
+   config.
+3. `tpt-quorum` integration for 2-node HA.
+4. `tpt-bastion` network-provider integration for declarative config +
+   drift detection — contingent on resolving the open `bastion-providers`
+   interface question (see the combined design-specs doc).
+5. Admin UI via `tpt-appfront`.
+6. WireGuard (`boringtun`) and DNS (`hickory-dns`) adoption.
+7. Everything else (IDS/IPS, OpenVPN/IPsec compatibility) as explicit,
+   separately-scoped later decisions — not default scope creep.
+
+## Open questions
+
+- Confirm `tpt-fathom`'s protocol type definitions before finalizing
+  `Matcher` — not read directly this session.
+- Confirm `tpt-gatemesh`'s routing-verification implementation before
+  building the rule-lint pass — same caveat.
+- Confirm `bastion-ir`'s versioning scheme before finalizing `Ruleset`'s
+  `version: u64` field — a mismatch here would be awkward to fix later.
+- Decide DHCP scope (own component vs. adopted) — not addressed in any
+  spec so far; flagged as a real gap in the original OPNsense breakdown
+  with no mature permissive Rust alternative identified yet.
+
+## Resolved decisions (2026-09-24)
+
+Before writing a task checklist, the repos this spec assumes as
+dependencies were checked directly against the working directory (same
+due-diligence pass `tpt-privd`'s spec went through). Several did not
+resolve as expected:
+
+- `tpt-netctl` and `tpt-privd` exist, but as spec.txt + todo.md only —
+  no code yet. `tpt-netctl` has already independently sketched
+  placeholder `Ruleset`/`Chain`/`Rule`/`Matcher`/`Action`/`Policy` types
+  directly from this spec's Core Types section, marked
+  `// TODO(upstream): replace with portcullis-rules::*`.
+- `tpt-citadel` and `tpt-appfront` are real, with actual code.
+  `tpt-citadel`'s audit crate is explicitly immature (unsigned,
+  in-memory only) per `tpt-privd`'s own resolved-decisions note — not
+  relevant to this repo directly, but worth knowing before leaning on it
+  elsewhere in the product.
+- `tpt-quorum`, `tpt-bastion` (and `bastion-ir`), `tpt-fathom`,
+  `tpt-aegis`, and `tpt-gatemesh` **do not exist anywhere in the
+  portfolio** — no repo, no code. Checked plausible near-miss names
+  (`tpt-identity`, `tpt-capsec`, `tpt-protocol`, `tpt-linux-sandbox`,
+  `tpt-basestation`) for a hidden fit; none match (`tpt-identity` is a
+  Go DID/verifiable-credentials system, not admin-panel IAM;
+  `tpt-protocol` is industrial protocol translation, not DPI; the rest
+  are unrelated in domain).
+
+Decisions made in light of the above:
+
+1. **Scope:** the task checklist (`todo.md`) covers Phases 1–2 of the
+   phased build order only — `portcullis-rules` plus a minimal
+   single-box `portcullis-daemon` (netctl + privd wiring, plain-file
+   config). Phases 3–6 (quorum HA, Bastion declarative config, admin
+   UI, WireGuard/DNS adoption, IDS/IPS) are tracked as follow-ups, not
+   broken into tasks, until those repos exist. Mirrors how
+   `tpt-netctl`'s own todo.md already scoped itself down for the same
+   reason.
+2. **Naming:** `tpt-portcullis` and the `portcullis-*` crate names are
+   confirmed final, no longer just a working title — same treatment
+   `tpt-netctl` and `tpt-privd` gave their own working titles.
+3. **`Matcher` and the verification pass:** built self-contained in
+   `portcullis-rules` now (own address/port/protocol types, own
+   graph-based lint pass modeled after the *pattern* this spec
+   describes) rather than blocking on `tpt-fathom`/`tpt-gatemesh`.
+   Follow-up: reconcile with `tpt-netctl`'s existing placeholder types
+   and swap in the real upstream types once those repos exist.
+4. **MSRV/edition:** edition 2021, Rust 1.82 — matches `tpt-netctl`, the
+   closest related dependency, so `portcullis-rules` is usable as a
+   path dependency from it without an MSRV conflict.
+5. **License:** MIT OR Apache-2.0 (dual), TPT Solutions — confirmed,
+   `LICENSE-MIT`/`LICENSE-APACHE` added at repo root.
