@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  test:
+    name: test (${{ matrix.rust }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # MSRV: portcullis-rules only. Full workspace cannot load on 1.82
+          # because tpt-privd (path dep of daemon/cli) is edition 2024.
+          - rust: "1.82"
+            msrv: true
+          - rust: stable
+            msrv: false
+    steps:
+      # Sibling path-deps needed only for the full-workspace (stable) job.
+      - uses: actions/checkout@v4
+        if: ${{ !matrix.msrv }}
+        with:
+          path: tpt-portcullis
+      - uses: actions/checkout@v4
+        if: ${{ !matrix.msrv }}
+        with:
+          repository: TPT-Solutions/tpt-netctl
+          path: tpt-netctl
+      - uses: actions/checkout@v4
+        if: ${{ !matrix.msrv }}
+        with:
+          repository: TPT-Solutions/tpt-privd
+          path: tpt-privd
+      # MSRV job: single checkout, reduced workspace (no daemon/cli).
+      - uses: actions/checkout@v4
+        if: ${{ matrix.msrv }}
+      - uses: dtolnay/rust-toolchain@master
+        if: ${{ matrix.msrv }}
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+      - uses: dtolnay/rust-toolchain@master
+        if: ${{ !matrix.msrv }}
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        if: ${{ !matrix.msrv }}
+        with:
+          workspaces: tpt-portcullis
+
+      - name: Reduce workspace to portcullis-rules (MSRV)
+        if: ${{ matrix.msrv }}
+        working-directory: .
+        run: |
+          cp Cargo.toml Cargo.toml.full
+          cat > Cargo.toml <<'EOF'
+          [workspace]
+          resolver = "2"
+          members = ["crates/portcullis-rules"]
+
+          [workspace.package]
+          authors = ["TPT Solutions"]
+          license = "MIT OR Apache-2.0"
+          edition = "2021"
+          rust-version = "1.82"
+          repository = "https://github.com/TPT-Solutions/tpt-portcullis"
+
+          [workspace.dependencies]
+          serde = { version = "1", features = ["derive"] }
+          serde_json = "1"
+          EOF
+
+      - name: Build + test + clippy + fmt (MSRV)
+        if: ${{ matrix.msrv }}
+        run: |
+          cargo build -p portcullis-rules
+          cargo test -p portcullis-rules
+          cargo clippy -p portcullis-rules --all-targets -- -D warnings
+          cargo fmt --check
+
+      - name: Restore full workspace manifest
+        if: ${{ always() && matrix.msrv }}
+        run: mv Cargo.toml.full Cargo.toml
+
+      - name: Build + test + clippy + doc + fmt (full workspace)
+        if: ${{ !matrix.msrv }}
+        working-directory: tpt-portcullis
+        run: |
+          cargo build --workspace
+          cargo test --workspace
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo doc --workspace --no-deps
+          cargo fmt --check
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tpt-portcullis
+      - uses: actions/checkout@v4
+        with:
+          repository: TPT-Solutions/tpt-netctl
+          path: tpt-netctl
+      - uses: actions/checkout@v4
+        with:
+          repository: TPT-Solutions/tpt-privd
+          path: tpt-privd
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: --all-features check
+          workdir: tpt-portcullis

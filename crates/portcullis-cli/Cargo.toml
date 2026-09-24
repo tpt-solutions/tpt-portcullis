@@ -1,0 +1,19 @@
+[package]
+name = "portcullis-cli"
+description = "Admin CLI for the TPT Portcullis firewall/router"
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+# 1.85: talks to portcullis-daemon which pulls in tpt-privd; keep CLI aligned.
+rust-version = "1.85"
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+portcullis-rules.workspace = true
+portcullis-daemon = { path = "../portcullis-daemon", version = "0.1.0" }
+clap.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

@@ -1,0 +1,26 @@
+[package]
+name = "portcullis-daemon"
+description = "Single-box Portcullis daemon — wires portcullis-rules, tpt-netctl, and tpt-privd"
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+# 1.85: required by tpt-privd (edition 2024 / rust-version 1.85 path dep).
+rust-version = "1.85"
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+portcullis-rules.workspace = true
+tpt-netctl-core.workspace = true
+tpt-netctl-nftables.workspace = true
+tpt-privd-envelope.workspace = true
+tpt-privd-client.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap.workspace = true
+
+[dev-dependencies]

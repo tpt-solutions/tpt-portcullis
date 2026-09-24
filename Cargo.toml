@@ -1,0 +1,51 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/portcullis-rules",
+    "crates/portcullis-cli",
+    "crates/portcullis-daemon",
+]
+
+[workspace.package]
+authors = ["TPT Solutions"]
+license = "MIT OR Apache-2.0"
+edition = "2021"
+rust-version = "1.82"
+repository = "https://github.com/TPT-Solutions/tpt-portcullis"
+
+# Workspace-wide MSRV is 1.82 so `portcullis-rules` stays a valid path
+# dependency for `tpt-netctl` (also MSRV 1.82). Crates that depend on
+# `tpt-privd` (MSRV 1.85) override `rust-version` in their own Cargo.toml.
+
+[workspace.dependencies]
+portcullis-rules = { path = "crates/portcullis-rules", version = "0.1.0" }
+
+# Sibling path deps (local layout: Open Source/{tpt-portcullis,tpt-netctl,tpt-privd}).
+# CI checks these repos out as siblings — see .github/workflows/ci.yml.
+tpt-netctl-core = { path = "../tpt-netctl/crates/tpt-netctl-core" }
+tpt-netctl-nftables = { path = "../tpt-netctl/crates/tpt-netctl-nftables" }
+tpt-privd-envelope = { path = "../tpt-privd/crates/tpt-privd-envelope" }
+tpt-privd-client = { path = "../tpt-privd/crates/tpt-privd-client" }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Errors
+thiserror = "2"
+
+# CLI / config
+clap = { version = "4", features = ["derive", "env"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async / concurrency (daemon control loop)
+# Using std threads only for Phase 2 — no async runtime yet.
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,46 @@
+# cargo-deny configuration — license and duplicate-dependency checks.
+# Run with: cargo deny check
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# All ignores below are transitive via tpt-netctl-nftables (path dep) —
+# cannot be fixed in this repo. Tracked as a follow-up against tpt-netctl.
+ignore = [
+    { id = "RUSTSEC-2025-0126", reason = "nftnl 0.6.2 via tpt-netctl-nftables; fixed in nftnl >=0.9.0 — upgrade tracked upstream" },
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained via netlink-packet-utils; no fix available upstream" },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error unmaintained via nftnl/err-derive; no fix available upstream" },
+]
+
+[licenses]
+version = 2
+# MIT OR Apache-2.0 compatible — allow the common permissive set used
+# across TPT Solutions repos (matches tpt-netctl's deny.toml).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+]
+
+# Note: no license exceptions currently needed — ring is not in this tree.
+# Re-add a [[licenses.exceptions]] entry if a future dep requires one.
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

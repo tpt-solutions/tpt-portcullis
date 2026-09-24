@@ -1,0 +1,2 @@
+# clippy configuration — CI runs `cargo clippy --workspace --all-targets -- -D warnings`.
+# Keep this file for local consistency with sibling repos; lint policy lives in CI.

@@ -1,0 +1,2 @@
+# rustfmt configuration — match sibling TPT Solutions repos where possible.
+edition = "2021"
