@@ -173,6 +173,8 @@ Decisions made in light of the above:
    describes) rather than blocking on `tpt-fathom`/`tpt-gatemesh`.
    Follow-up: reconcile with `tpt-netctl`'s existing placeholder types
    and swap in the real upstream types once those repos exist.
+   *(Resolved 2026-09-24: `tpt-netctl` now re-exports
+   `portcullis-rules` for its rule model — see `todo.md` Follow-ups.)*
 4. **MSRV/edition:** edition 2021, Rust 1.82 — matches `tpt-netctl`, the
    closest related dependency, so `portcullis-rules` is usable as a
    path dependency from it without an MSRV conflict.

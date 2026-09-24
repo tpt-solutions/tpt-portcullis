@@ -8,8 +8,9 @@ use crate::matcher::Matcher;
 /// Stable identifier for a rule within a [`Ruleset`](crate::Ruleset).
 ///
 /// **Decision:** a `u64` newtype (not a UUID). Rationale:
-/// - Matches `tpt-netctl`'s placeholder `type RuleId = u64`, so the eventual
-///   upstream swap is type-for-type.
+/// - Same underlying representation `tpt-netctl` used for its pre-swap
+///   `type RuleId = u64`, and `tpt-netctl` now re-exports this newtype
+///   directly — type-for-type, no conversion at the boundary.
 /// - No extra dependency (uuid) for a local, single-box ruleset.
 /// - Stable across serde round-trips and usable as a map key for counters
 ///   and diffing without parsing.

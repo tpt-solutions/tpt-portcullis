@@ -13,9 +13,6 @@ use crate::bridge::desired_netctl_ruleset;
 /// Errors from bridging / applying.
 #[derive(Debug, Error)]
 pub enum BridgeError {
-    /// Conversion from portcullis types to netctl types failed.
-    #[error("failed to convert ruleset for netctl: {0}")]
-    Convert(String),
     /// netctl rejected the diff during validate.
     #[error("netctl validate failed: {0}")]
     Validate(String),
@@ -73,7 +70,7 @@ impl DaemonState {
     ///
     /// # Errors
     ///
-    /// [`BridgeError`] from conversion, validate, or apply.
+    /// [`BridgeError`] from validate or apply.
     pub fn apply(&self, ruleset: &Ruleset) -> Result<ApplyOutcome, BridgeError> {
         let desired = desired_netctl_ruleset(ruleset);
         let diff = self

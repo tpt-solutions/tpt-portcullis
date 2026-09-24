@@ -14,10 +14,10 @@ config, no HA/declarative config yet). Phases 3–6 (`tpt-quorum` HA,
 adoption, IDS/IPS) are **not** broken into tasks — see Follow-ups.
 
 **Dependency note (updated 2026-09-24):** `tpt-netctl` and `tpt-privd` are
-real repos **with real code** (the earlier "spec-only" note was stale as of
-implementation start). `tpt-netctl` exposes `DataplaneBackend::{validate,apply}`
-taking its own placeholder `RulesetDiff` types (marked `TODO(upstream):
-replace with portcullis_rules::*`). `tpt-privd` exposes an open
+real repos **with real code**. `tpt-netctl` now **re-exports
+`portcullis-rules`** for its rule model (the old local placeholders are
+gone — resolved Follow-up); its `DataplaneBackend::{validate,apply}` take
+`portcullis_rules::RulesetDiff`. `tpt-privd` exposes an open
 `CommandKind(u32)` envelope (`CUSTOM_START = 0x8000_0000`) and a one-shot
 CBOR client over **Unix sockets only** (Windows returns
 `UnsupportedPlatform`). `tpt-citadel` and `tpt-appfront` have real code.
@@ -100,7 +100,8 @@ manifests cannot parse on 1.82); stable runs the full workspace.
 - [x] `tpt-netctl` integration:
   - [x] Add as path dependency
   - [x] Confirm current shape of `tpt-netctl`'s `apply(&RulesetDiff)` — **real:** `DataplaneBackend::{validate,apply}` on `tpt_netctl_core`, diff type is `RulesetDiff { add, update, remove }` against placeholder rule types
-  - [x] Wire `portcullis-rules::Ruleset` → `tpt_netctl_core::RulesetDiff` via `bridge` module (type mismatch documented in bridge rustdoc: our `priority`/`NatRule`/`ShapingPolicy` vs their inline `Snat`/`Dnat`/`RateLimit` + `Jump`/`Continue`/`description`; priority order baked into declaration order at bridge time)
+  - [x] Wire `portcullis-rules::Ruleset` → `tpt_netctl_core::RulesetDiff` via a bridge module (type mismatch documented in bridge rustdoc: our `priority`/`NatRule`/`ShapingPolicy` vs their inline `Snat`/`Dnat`/`RateLimit` + `Jump`/`Continue`/`description`; priority order baked into declaration order at bridge time)
+    - **Updated (2026-09-24):** `tpt-netctl` now re-exports `portcullis-rules` for its rule model — types are unified; `bridge` only sorts by `priority`.
 - [x] `tpt-privd` integration:
   - [x] Add as path dependency
   - [x] Confirm current shape of `tpt-privd`'s command envelope — **real:** open `CommandId`/`CommandKind(u32)`/`Command`/`CommandResult` CBOR envelope; one-shot Unix-socket client (`tpt-privd-client::call`)
@@ -122,6 +123,7 @@ manifests cannot parse on 1.82); stable runs the full workspace.
 - IDS/IPS (Suricata) and OpenVPN/IPsec compatibility — explicitly out of scope per spec.txt, deferred to a later, separately-scoped decision
 - Reconcile `portcullis-rules`' `Matcher`/lint pass with `tpt-fathom`'s protocol types and `tpt-gatemesh`'s verification implementation once those repos exist and have code
 - Reconcile `portcullis-rules` with `tpt-netctl`'s existing placeholder `Ruleset`/`Chain`/`Rule`/`Matcher`/`Action`/`Policy` types (defined in `tpt-netctl`'s workspace, marked `TODO(upstream)`) — swap `tpt-netctl` over to depend on `portcullis-rules` directly
+  - **Done (2026-09-24):** `tpt-netctl-core` path-deps on `portcullis-rules` and re-exports the rule model; `portcullis-rules` gained `Jump`/`Continue`, `Policy::Reject`, and `RulesetDiff` for the swap; daemon `bridge` is now priority-sort only.
 - Full "privd is the only kernel-toucher" posture: today's Phase 2 applies via in-process `tpt-netctl` (needs `CAP_NET_ADMIN`); long-term needs a netctl `CommandExecutor` inside `tpt-privd` so the daemon stays unprivileged — not blocked on code, but a design follow-up
 - Confirm `bastion-ir`'s versioning scheme once `tpt-bastion` exists; migrate `Ruleset.version` if it doesn't match
 - DHCP scope decision (own component vs. adopted) — open question from spec.txt, no mature permissive Rust alternative identified yet

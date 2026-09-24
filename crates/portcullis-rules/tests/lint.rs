@@ -198,6 +198,42 @@ fn non_terminal_does_not_shadow() {
 }
 
 #[test]
+fn jump_is_not_terminal_for_lint() {
+    // Jump transfers control but may return — must not mark later rules
+    // unreachable even when its matcher is a strict superset.
+    let rs = Ruleset::new(vec![Chain::new(
+        "input",
+        vec![
+            rule(
+                1,
+                10,
+                Matcher {
+                    protocol: Protocol::Tcp,
+                    ..Matcher::any()
+                },
+                Action::Jump("sub".into()),
+            ),
+            rule(2, 20, tcp_dst(PortMatcher::Single(22)), Action::Accept),
+        ],
+        Policy::Drop,
+    )]);
+    assert_eq!(verify(&rs), Ok(()));
+}
+
+#[test]
+fn continue_is_not_terminal_for_lint() {
+    let rs = Ruleset::new(vec![Chain::new(
+        "input",
+        vec![
+            rule(1, 10, Matcher::any(), Action::Continue),
+            rule(2, 20, tcp_dst(PortMatcher::Single(22)), Action::Accept),
+        ],
+        Policy::Drop,
+    )]);
+    assert_eq!(verify(&rs), Ok(()));
+}
+
+#[test]
 fn detects_duplicate_rule_id() {
     let rs = Ruleset::new(vec![
         Chain::new(

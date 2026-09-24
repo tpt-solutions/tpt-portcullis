@@ -294,5 +294,7 @@ fn action_label(rule: &Rule) -> String {
         crate::Action::Reject => "reject".into(),
         crate::Action::Nat(_) => "nat".into(),
         crate::Action::RateLimit(_) => "rate-limit".into(),
+        crate::Action::Jump(target) => format!("jump to `{target}`"),
+        crate::Action::Continue => "continue".into(),
     }
 }

@@ -46,6 +46,8 @@ fn action_variants_round_trip() {
         Action::Nat(NatRule::dnat("198.51.100.10")),
         Action::Nat(NatRule::masquerade()),
         Action::RateLimit(ShapingPolicy::pps(100, 200)),
+        Action::Jump("log_chain".into()),
+        Action::Continue,
     ];
     for a in actions {
         assert_eq!(a, round_trip(&a), "action round-trip failed");
@@ -56,6 +58,20 @@ fn action_variants_round_trip() {
 fn policy_round_trip() {
     assert_eq!(Policy::Accept, round_trip(&Policy::Accept));
     assert_eq!(Policy::Drop, round_trip(&Policy::Drop));
+    assert_eq!(Policy::Reject, round_trip(&Policy::Reject));
+}
+
+#[test]
+fn ruleset_diff_round_trip() {
+    let diff = RulesetDiff {
+        add: vec![sample_rule(RuleId(10), 10, Action::Accept)],
+        update: vec![],
+        remove: vec![RuleId(3), RuleId(4)],
+    };
+    assert_eq!(diff, round_trip(&diff));
+    assert!(!diff.is_empty());
+    assert_eq!(diff.len(), 3);
+    assert!(RulesetDiff::default().is_empty());
 }
 
 #[test]

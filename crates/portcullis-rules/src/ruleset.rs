@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::action::Policy;
-use crate::rule::Rule;
+use crate::rule::{Rule, RuleId};
 
 /// Current schema version written by this crate on serialize.
 ///
@@ -84,5 +84,35 @@ impl Chain {
             rules,
             default_policy,
         }
+    }
+}
+
+/// A computed difference between a desired [`Ruleset`] and live dataplane
+/// state.
+///
+/// Produced by a backend's diff logic; submitted to its `validate`/`apply`
+/// (e.g. `tpt_netctl_core::DataplaneBackend`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RulesetDiff {
+    /// Rules present in the desired state but not live (to add).
+    pub add: Vec<Rule>,
+    /// Rules present in both but with changed matcher/action/priority
+    /// (to update).
+    pub update: Vec<Rule>,
+    /// [`RuleId`]s present live but not desired (to remove).
+    pub remove: Vec<RuleId>,
+}
+
+impl RulesetDiff {
+    /// Returns `true` when the diff would make no changes.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.add.is_empty() && self.update.is_empty() && self.remove.is_empty()
+    }
+
+    /// Total number of rule-level changes represented by this diff.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.add.len() + self.update.len() + self.remove.len()
     }
 }

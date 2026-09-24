@@ -37,5 +37,5 @@ pub use matcher::{
 };
 pub use nat::{NatRule, NatType, TranslationTarget};
 pub use rule::{Rule, RuleId};
-pub use ruleset::{Chain, Ruleset, SCHEMA_VERSION};
+pub use ruleset::{Chain, Ruleset, RulesetDiff, SCHEMA_VERSION};
 pub use shaping::{RateUnit, ShapingPolicy};

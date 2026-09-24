@@ -24,14 +24,24 @@ pub enum Action {
     Nat(NatRule),
     /// Rate-limit matching traffic.
     RateLimit(ShapingPolicy),
+    /// Jump to another named chain (nftables `jump`); control returns to
+    /// this chain after the target's evaluation finishes.
+    Jump(String),
+    /// Continue to the next rule without terminating evaluation.
+    Continue,
 }
 
 impl Action {
     /// Returns `true` if this action terminates packet evaluation for the
-    /// chain (as opposed to a non-terminal transform like NAT/rate-limit).
+    /// chain (as opposed to a non-terminal transform like NAT/rate-limit,
+    /// or a transfer of control like `Jump`/`Continue`).
     ///
     /// Terminal actions are the ones that make a later rule *unreachable*
     /// when their matcher is a superset of a lower-priority rule's matcher.
+    ///
+    /// `Jump` is deliberately **not** terminal here: the target chain may
+    /// return control, so a later rule can still run — treating it as
+    /// terminal would produce false-positive `Unreachable` lints.
     #[must_use]
     pub const fn is_terminal(&self) -> bool {
         matches!(self, Self::Accept | Self::Drop | Self::Reject)
@@ -46,6 +56,8 @@ pub enum Policy {
     Accept,
     /// Drop unmatched traffic.
     Drop,
+    /// Reject unmatched traffic (notify the sender).
+    Reject,
 }
 
 impl Policy {
@@ -55,6 +67,7 @@ impl Policy {
         match self {
             Self::Accept => Action::Accept,
             Self::Drop => Action::Drop,
+            Self::Reject => Action::Reject,
         }
     }
 }
